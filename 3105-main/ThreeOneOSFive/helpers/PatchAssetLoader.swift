@@ -1,24 +1,21 @@
 import Foundation
 
 enum PatchAssetLoader {
-    static func url(for definition: LocalPatchDefinition, bundle: Bundle = .main) -> URL? {
-        // Tìm file trong gốc bundle (không cần thư mục con)
-        if let url = bundle.url(forResource: definition.resourceName, withExtension: "3105") {
-            return url
-        }
-        return nil
+    static func loadPatchData(for definition: LocalPatchDefinition) -> Data? {
+        guard let game = LocalGameVariant(rawValue: definition.game.rawValue) else { return nil }
+        return EmbeddedPatchLoader.data(for: definition.feature, game: game)
     }
 
-    static func exists(for definition: LocalPatchDefinition, bundle: Bundle = .main) -> Bool {
-        url(for: definition, bundle: bundle) != nil
+    static func exists(for definition: LocalPatchDefinition) -> Bool {
+        return loadPatchData(for: definition) != nil
     }
 
-    static func availableFeatures(for game: LocalGameVariant, bundle: Bundle = .main) -> Set<LocalPatchFeature> {
+    static func availableFeatures(for game: LocalGameVariant) -> Set<LocalPatchFeature> {
         Set(LocalPatchFeature.allCases.filter { feature in
             guard let definition = LocalPatchDefinitions.definition(for: feature, game: game) else {
                 return false
             }
-            return exists(for: definition, bundle: bundle)
+            return exists(for: definition)
         })
     }
 }
