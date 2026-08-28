@@ -13,6 +13,11 @@ struct GamePatchesView: View {
     @State private var availableFeatures: Set<LocalPatchFeature> = []
     @State private var activeReceipts: [LocalPatchFeature: PatchTransactionReceipt] = [:]
 
+    // THÊM STATE CHO ALERT
+    @State private var pendingFeature: LocalPatchFeature?
+    @State private var pendingValue: Bool = false
+    @State private var showConfirmAlert = false
+
     private var localGame: LocalGameVariant? {
         LocalGameVariant(rawValue: game.bundleID)
     }
@@ -37,6 +42,24 @@ struct GamePatchesView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text("Chức năng này đang bảo trì vì chưa có file patch tương ứng.")
+        }
+        // THÊM ALERT XÁC NHẬN
+        .alert("Xác nhận áp dụng patch", isPresented: $showConfirmAlert) {
+            Button("Hủy", role: .cancel) {
+                pendingFeature = nil
+            }
+            Button("Áp dụng") {
+                if let feature = pendingFeature {
+                    setFeature(feature, pendingValue)
+                }
+                pendingFeature = nil
+            }
+        } message: {
+            if let feature = pendingFeature {
+                Text("Bạn có chắc muốn \(pendingValue ? "bật" : "tắt") \(feature.rawValue)?\nMọi file gốc sẽ được sao lưu trước khi ghi.")
+            } else {
+                Text("")
+            }
         }
     }
 
@@ -145,7 +168,10 @@ struct GamePatchesView: View {
                             showUnsupported = true
                             return
                         }
-                        setFeature(feature, value)
+                        // THAY ĐỔI: HIỆN ALERT THAY VÌ GỌI TRỰC TIẾP
+                        pendingFeature = feature
+                        pendingValue = value
+                        showConfirmAlert = true
                     }
                 ))
                 .labelsHidden()
