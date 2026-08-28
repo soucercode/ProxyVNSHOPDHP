@@ -1,19 +1,10 @@
 import Foundation
 
-/// Resolves patch resources that are bundled with this app.
-/// This loader only inspects the app bundle; it does not access another app's container or modify another process.
 enum PatchAssetLoader {
     static func url(for definition: LocalPatchDefinition, bundle: Bundle = .main) -> URL? {
+        // Tìm file trong gốc bundle (không cần thư mục con)
         if let url = bundle.url(forResource: definition.resourceName, withExtension: "3105") {
             return url
-        }
-
-        // Also support projects that keep the resources under Patches/ after packaging.
-        if let patchesURL = bundle.url(forResource: "Patches", withExtension: nil) {
-            let candidate = patchesURL.appendingPathComponent(definition.resourceName + ".3105")
-            if FileManager.default.fileExists(atPath: candidate.path) {
-                return candidate
-            }
         }
         return nil
     }
