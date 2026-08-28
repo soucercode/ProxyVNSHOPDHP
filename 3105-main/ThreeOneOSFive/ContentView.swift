@@ -1203,7 +1203,7 @@ struct GameDemoView: View {
                     // It does not modify another app's sandbox.
                     try await Task.sleep(nanoseconds: 900_000_000)
                     _ = try DevicePatchService.applyBundledDemoPatch(
-                        resourceName: resourceURL.lastPathComponent,
+                        resourceName: definition.resourceName + ".3105",
                         featureName: feature.name
                     )
                     enabled.insert(index)
