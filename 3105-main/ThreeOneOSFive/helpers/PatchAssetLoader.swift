@@ -1,33 +1,48 @@
 import Foundation
 
-/// Resolves patch resources that are bundled with this app.
-/// This loader only inspects the app bundle; it does not access another app's container or modify another process.
 enum PatchAssetLoader {
-    static func url(for definition: LocalPatchDefinition, bundle: Bundle = .main) -> URL? {
-        if let url = bundle.url(forResource: definition.resourceName, withExtension: "3105") {
-            return url
+    static func load(
+        definition: PatchDefinition,
+        gameBundleID: String
+    ) throws -> (project: PatchProject, data: Data) {
+        
+        let assetName: String
+        if gameBundleID == "com.dts.freefireth" {
+            assetName = definition.assetNameFFTH
+        } else if gameBundleID == "com.dts.freefiremax" {
+            assetName = definition.assetNameFFMAX
+        } else {
+            throw NSError(
+                domain: "PatchAssetLoader",
+                code: 400,
+                userInfo: [NSLocalizedDescriptionKey: "Game không được hỗ trợ: \(gameBundleID)"]
+            )
         }
-
-        // Also support projects that keep the resources under Patches/ after packaging.
-        if let patchesURL = bundle.url(forResource: "Patches", withExtension: nil) {
-            let candidate = patchesURL.appendingPathComponent(definition.resourceName + ".3105")
-            if FileManager.default.fileExists(atPath: candidate.path) {
-                return candidate
+        
+        // Tìm file .3105 trong bundle
+        guard let url = Bundle.main.url(
+            forResource: assetName,
+            withExtension: "3105"
+        ) else {
+            // Thử tìm trong thư mục Patches/ nếu không thấy
+            guard let urlInPatches = Bundle.main.url(
+                forResource: assetName,
+                withExtension: "3105",
+                subdirectory: "Patches"
+            ) else {
+                throw NSError(
+                    domain: "PatchAssetLoader",
+                    code: 404,
+                    userInfo: [NSLocalizedDescriptionKey: "Không tìm thấy \(assetName).3105"]
+                )
             }
+            let data = try Data(contentsOf: urlInPatches)
+            let decoded = try PatchPackageCodec.decode(data, password: nil)
+            return (decoded.project, data)
         }
-        return nil
-    }
-
-    static func exists(for definition: LocalPatchDefinition, bundle: Bundle = .main) -> Bool {
-        url(for: definition, bundle: bundle) != nil
-    }
-
-    static func availableFeatures(for game: LocalGameVariant, bundle: Bundle = .main) -> Set<LocalPatchFeature> {
-        Set(LocalPatchFeature.allCases.filter { feature in
-            guard let definition = LocalPatchDefinitions.definition(for: feature, game: game) else {
-                return false
-            }
-            return exists(for: definition, bundle: bundle)
-        })
+        
+        let data = try Data(contentsOf: url)
+        let decoded = try PatchPackageCodec.decode(data, password: nil)
+        return (decoded.project, data)
     }
 }
