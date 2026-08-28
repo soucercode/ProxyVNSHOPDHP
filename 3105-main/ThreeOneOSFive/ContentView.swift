@@ -1195,7 +1195,7 @@ struct GameDemoView: View {
             do {
                 if value {
                     guard let definition = feature.definition(for: bundleID),
-                          let resourceURL = PatchAssetLoader.url(for: definition) else {
+                          let resourceURL = PatchAssetLoader.loadPatchData(for: definition) else {
                         throw PatchPackageError.invalidProject
                     }
 
