@@ -3,7 +3,6 @@ import UIKit
 
 struct GamesHomeView: View {
     @Environment(\.appLanguage) private var language
-    @EnvironmentObject private var draftCoordinator: PatchDraftCoordinator
     @StateObject private var store = PatchProjectStore()
     @State private var games: [RemoteGameSummary] = []
     @State private var isLoadingGames = false
@@ -23,7 +22,13 @@ struct GamesHomeView: View {
                     LazyVGrid(columns: columns, spacing: 14) {
                         ForEach(games) { game in
                             NavigationLink {
-                                GamePatchesView(game: game, store: store)
+                                // SỬA: Dùng GameDemoView thay vì GamePatchesView
+                                GameDemoView(
+                                    title: game.name,
+                                    imageName: game.iconPath?.components(separatedBy: "/").last ?? "app.fill",
+                                    bundleID: game.bundleID,
+                                    state: ProxyDemoState()
+                                )
                             } label: {
                                 GameCardView(
                                     title: game.name,
@@ -62,16 +67,6 @@ struct GamesHomeView: View {
             }
             .refreshable { await loadGames() }
             .task { await loadGames() }
-            .sheet(item: $draftCoordinator.request) { request in
-                PatchProjectEditorView(
-                    existingProject: nil,
-                    passwordIsProtected: false,
-                    initialDraft: request.draft
-                ) { project, password in
-                    store.create(project: project, password: password)
-                    draftCoordinator.clear()
-                }
-            }
         }
         .tint(AppTheme.accent)
         .preferredColorScheme(.dark)
@@ -186,9 +181,6 @@ struct GameCardView: View {
     }
 }
 
-/// Shows a locally cached copy immediately if one exists (so icons still render offline after
-/// their first successful load), then refreshes from the network in the background when
-/// possible. See RemoteImageCache for the on-disk persistence.
 struct CachedAsyncImage<Placeholder: View>: View {
     let url: URL?
     @ViewBuilder let placeholder: () -> Placeholder
