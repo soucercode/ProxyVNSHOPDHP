@@ -1,1 +1,323 @@
+name: Build ProxySHOPDHP unsigned IPA
 
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build unsigned IPA
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Kiểm tra source
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "===== ROOT ====="
+          pwd
+          echo
+
+          echo "===== PROJECTS ====="
+          find . \
+            -type d \
+            \( -name "*.xcodeproj" -o -name "*.xcworkspace" \) \
+            -not -path "*/Pods/*" \
+            -print | sort
+
+      - name: Tìm Xcode project
+        id: project
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          PROJECT_PATH="$(
+            find . \
+              -type d \
+              -name "*.xcodeproj" \
+              -not -path "*/Pods/*" \
+              | head -n 1
+          )"
+
+          if [[ -z "$PROJECT_PATH" ]]; then
+            echo "❌ Không tìm thấy .xcodeproj"
+            exit 1
+          fi
+
+          PROJECT_DIR="$(dirname "$PROJECT_PATH")"
+          PROJECT_FILE="$(basename "$PROJECT_PATH")"
+          PROJECT_NAME="${PROJECT_FILE%.xcodeproj}"
+
+          echo "project_path=$PROJECT_PATH" >> "$GITHUB_OUTPUT"
+          echo "project_dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
+          echo "project_name=$PROJECT_NAME" >> "$GITHUB_OUTPUT"
+
+          echo "✅ Project:"
+          echo "   $PROJECT_PATH"
+          echo "✅ Directory:"
+          echo "   $PROJECT_DIR"
+          echo "✅ Name:"
+          echo "   $PROJECT_NAME"
+
+      - name: Chọn Xcode
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "===== XCODE ====="
+          xcode-select -p
+          xcodebuild -version
+
+      - name: Liệt kê scheme
+        id: schemes
+        working-directory: ${{ steps.project.outputs.project_dir }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          PROJECT="${{ steps.project.outputs.project_name }}.xcodeproj"
+
+          echo "===== XCODE LIST ====="
+
+          xcodebuild \
+            -project "$PROJECT" \
+            -list
+
+      - name: Chọn scheme build
+        id: scheme
+        working-directory: ${{ steps.project.outputs.project_dir }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          PROJECT="${{ steps.project.outputs.project_name }}.xcodeproj"
+
+          LIST_OUTPUT="$(
+            xcodebuild \
+              -project "$PROJECT" \
+              -list
+          )"
+
+          echo "$LIST_OUTPUT"
+
+          SCHEME=""
+
+          if echo "$LIST_OUTPUT" | grep -E '^[[:space:]]+3105$' >/dev/null; then
+            SCHEME="3105"
+          elif echo "$LIST_OUTPUT" | grep -E '^[[:space:]]+ProxySHOPDHP$' >/dev/null; then
+            SCHEME="ProxySHOPDHP"
+          fi
+
+          if [[ -z "$SCHEME" ]]; then
+            SCHEME="$(
+              echo "$LIST_OUTPUT" |
+              awk '
+                /^Schemes:/ {found=1; next}
+                found && NF {gsub(/^[ \t]+|[ \t]+$/, ""); print}
+              ' |
+              head -n 1
+            )"
+          fi
+
+          if [[ -z "$SCHEME" ]]; then
+            echo "❌ Không tìm được scheme."
+            exit 1
+          fi
+
+          echo "scheme=$SCHEME" >> "$GITHUB_OUTPUT"
+
+          echo
+          echo "✅ Scheme được chọn: $SCHEME"
+
+      - name: Build Archive unsigned
+        id: archive
+        working-directory: ${{ steps.project.outputs.project_dir }}
+        shell: bash
+        env:
+          SCHEME: ${{ steps.scheme.outputs.scheme }}
+        run: |
+          set -euo pipefail
+
+          ARCHIVE_PATH="$RUNNER_TEMP/ProxySHOPDHP.xcarchive"
+
+          rm -rf "$ARCHIVE_PATH"
+
+          echo "===== BUILD ARCHIVE ====="
+          echo "Scheme: $SCHEME"
+          echo "Archive: $ARCHIVE_PATH"
+
+          xcodebuild \
+            archive \
+            -project "${{ steps.project.outputs.project_name }}.xcodeproj" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination "generic/platform=iOS" \
+            -archivePath "$ARCHIVE_PATH" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
+
+          if [[ ! -d "$ARCHIVE_PATH" ]]; then
+            echo "❌ Archive không được tạo."
+            exit 1
+          fi
+
+          echo
+          echo "✅ Archive đã tạo:"
+          echo "$ARCHIVE_PATH"
+
+      - name: Tìm app thực tế
+        id: app
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ARCHIVE_PATH="$RUNNER_TEMP/ProxySHOPDHP.xcarchive"
+
+          echo "===== APP IN ARCHIVE ====="
+
+          APP_PATH="$(
+            find \
+              "$ARCHIVE_PATH/Products/Applications" \
+              -maxdepth 1 \
+              -type d \
+              -name "*.app" \
+              | head -n 1
+          )"
+
+          if [[ -z "$APP_PATH" ]]; then
+            echo "❌ Không tìm thấy .app."
+
+            echo
+            echo "===== ARCHIVE TREE ====="
+
+            find \
+              "$ARCHIVE_PATH" \
+              -maxdepth 7 \
+              -print | sort
+
+            exit 1
+          fi
+
+          APP_NAME="$(basename "$APP_PATH")"
+
+          echo "app_path=$APP_PATH" >> "$GITHUB_OUTPUT"
+          echo "app_name=$APP_NAME" >> "$GITHUB_OUTPUT"
+
+          echo "✅ App:"
+          echo "$APP_NAME"
+
+          echo "✅ App path:"
+          echo "$APP_PATH"
+
+      - name: Kiểm tra Info.plist
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          APP_PATH="${{ steps.app.outputs.app_path }}"
+
+          if [[ ! -f "$APP_PATH/Info.plist" ]]; then
+            echo "❌ Không có Info.plist."
+            exit 1
+          fi
+
+          echo "===== BUNDLE ID ====="
+
+          /usr/libexec/PlistBuddy \
+            -c "Print :CFBundleIdentifier" \
+            "$APP_PATH/Info.plist"
+
+          echo
+          echo "===== DISPLAY NAME ====="
+
+          /usr/libexec/PlistBuddy \
+            -c "Print :CFBundleDisplayName" \
+            "$APP_PATH/Info.plist" \
+            || true
+
+          echo
+          echo "===== VERSION ====="
+
+          /usr/libexec/PlistBuddy \
+            -c "Print :CFBundleShortVersionString" \
+            "$APP_PATH/Info.plist" \
+            || true
+
+      - name: Đóng gói IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          APP_PATH="${{ steps.app.outputs.app_path }}"
+
+          PAYLOAD_DIR="$RUNNER_TEMP/Payload"
+          IPA_PATH="$RUNNER_TEMP/ProxySHOPDHP-unsigned.ipa"
+
+          rm -rf "$PAYLOAD_DIR"
+          rm -f "$IPA_PATH"
+
+          mkdir -p "$PAYLOAD_DIR"
+
+          cp -R \
+            "$APP_PATH" \
+            "$PAYLOAD_DIR/"
+
+          cd "$RUNNER_TEMP"
+
+          /usr/bin/zip \
+            -qry \
+            "$IPA_PATH" \
+            "Payload"
+
+          mkdir -p "$GITHUB_WORKSPACE/out"
+
+          cp \
+            "$IPA_PATH" \
+            "$GITHUB_WORKSPACE/out/ProxySHOPDHP-unsigned.ipa"
+
+          echo "✅ IPA đã tạo:"
+          ls -lh "$GITHUB_WORKSPACE/out/ProxySHOPDHP-unsigned.ipa"
+
+      - name: Kiểm tra IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          IPA="$GITHUB_WORKSPACE/out/ProxySHOPDHP-unsigned.ipa"
+
+          if [[ ! -f "$IPA" ]]; then
+            echo "❌ Không tìm thấy IPA."
+            exit 1
+          fi
+
+          echo "===== IPA CONTENT ====="
+
+          unzip -l "$IPA" | head -n 60
+
+          echo
+          echo "===== FINAL IPA ====="
+
+          ls -lh "$IPA"
+
+          echo
+          echo "✅ BUILD IPA THÀNH CÔNG"
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProxySHOPDHP-unsigned-IPA
+          path: out/ProxySHOPDHP-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14
