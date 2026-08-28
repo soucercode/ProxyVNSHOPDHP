@@ -270,22 +270,18 @@ jobs:
 
           mkdir -p "$PAYLOAD_DIR"
 
-          cp -R \
-            "$APP_PATH" \
-            "$PAYLOAD_DIR/"
+          cp -R "$APP_PATH" "$PAYLOAD_DIR/"
+
+          # COPY THƯ MỤC Patches VÀO APP BUNDLE
+          cp -R "${{ steps.project.outputs.project_dir }}/ThreeOneOSFive/Patches" "$PAYLOAD_DIR/ProxySHOPDHP.app/"
 
           cd "$RUNNER_TEMP"
 
-          /usr/bin/zip \
-            -qry \
-            "$IPA_PATH" \
-            "Payload"
+          /usr/bin/zip -qry "$IPA_PATH" "Payload"
 
           mkdir -p "$GITHUB_WORKSPACE/out"
 
-          cp \
-            "$IPA_PATH" \
-            "$GITHUB_WORKSPACE/out/ProxySHOPDHP-unsigned.ipa"
+          cp "$IPA_PATH" "$GITHUB_WORKSPACE/out/ProxySHOPDHP-unsigned.ipa"
 
           echo "✅ IPA đã tạo:"
           ls -lh "$GITHUB_WORKSPACE/out/ProxySHOPDHP-unsigned.ipa"
