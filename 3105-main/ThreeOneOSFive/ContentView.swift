@@ -16,8 +16,6 @@ final class ProxyDemoState: ObservableObject {
     private var toastTask: Task<Void, Never>?
 
     private let serverURL: URL = {
-        // Chỉ chứa URL API public của license server.
-        // Không nhúng tài khoản/mật khẩu Admin vào IPA.
         if let value = Bundle.main.object(forInfoDictionaryKey: "LicenseServerURL") as? String,
            !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
            let url = URL(string: value) {
@@ -63,43 +61,33 @@ final class ProxyDemoState: ObservableObject {
         guard let expiresAt, !expiresAt.isEmpty, expiresAt != "Vĩnh viễn" else {
             return "Vĩnh viễn"
         }
-
         let value = expiresAt.replacingOccurrences(of: "Z", with: "+00:00")
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         var date = formatter.date(from: value)
-
         if date == nil {
             formatter.formatOptions = [.withInternetDateTime]
             date = formatter.date(from: value)
         }
-
         guard let date else { return expiresAt }
-
         let seconds = max(0, Int(date.timeIntervalSinceNow))
         if seconds == 0 { return "Hết hạn" }
-
         let days = seconds / 86_400
         let hours = (seconds % 86_400) / 3_600
         let minutes = (seconds % 3_600) / 60
-
         if days > 0 { return "Còn \(days) ngày \(hours) giờ" }
         if hours > 0 { return "Còn \(hours) giờ \(minutes) phút" }
         return "Còn \(max(1, minutes)) phút"
     }
 
     var deviceID: String {
-        // identifierForVendor là ID riêng theo app/vendor trên từng thiết bị.
-        // Đây không phải UDID hệ thống của Apple.
         if let vendor = UIDevice.current.identifierForVendor?.uuidString {
             return vendor.uppercased()
         }
-
         let key = "proxy.demo.deviceID"
         if let saved = UserDefaults.standard.string(forKey: key), !saved.isEmpty {
             return saved
         }
-
         let created = UUID().uuidString.uppercased()
         UserDefaults.standard.set(created, forKey: key)
         return created
@@ -114,7 +102,6 @@ final class ProxyDemoState: ObservableObject {
         withAnimation(.easeOut(duration: 0.15)) {
             toast = message
         }
-
         let current = message
         toastTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 4_000_000_000)
@@ -132,18 +119,13 @@ final class ProxyDemoState: ObservableObject {
 
     func activate(_ key: String) async {
         guard !isBusy else { return }
-
         let cleaned = key.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         guard !cleaned.isEmpty else {
             showToast("⚠️ Vui lòng nhập Key")
             return
         }
-
         isBusy = true
         defer { isBusy = false }
-
-        // Không thêm delay giả; chỉ chờ phản hồi thật từ License Server.
-
         do {
             let result = try await LicenseAPI.activate(
                 baseURL: serverURL,
@@ -151,15 +133,12 @@ final class ProxyDemoState: ObservableObject {
                 deviceID: deviceID,
                 deviceName: deviceName
             )
-
             guard result.ok else {
                 isActivated = false
-
                 let message = result.error ?? result.message ?? "Key không tồn tại"
                 let code = (result.code ?? "").uppercased()
-
                 if result.status == "banned" || code == "BANNED" || message.localizedCaseInsensitiveContains("admin") || message.localizedCaseInsensitiveContains("khoá") || message.localizedCaseInsensitiveContains("khóa") {
-                    showToast("⚠️ Key đã bị admin Đỗ Hồng Phúc khoá\\ndo vi phạm chính sách quy định hãy liên hệ 0888924907 để được mở!")
+                    showToast("⚠️ Key đã bị admin Đỗ Hồng Phúc khoá\ndo vi phạm chính sách quy định hãy liên hệ 0888924907 để được mở!")
                 } else if code == "DEVICE_BOUND" || message.lowercased().contains("thiết bị khác") {
                     showToast("Key đã sử dụng cho thiết bị khác")
                 } else if result.status == "expired" || message.lowercased().contains("hết hạn") {
@@ -169,16 +148,13 @@ final class ProxyDemoState: ObservableObject {
                 }
                 return
             }
-
             activatedKey = cleaned
             licenseExpiryText = result.expiresAt ?? "Vĩnh viễn"
             licenseRemainingText = remainingText(from: result.expiresAt)
             isActivated = true
-
             UserDefaults.standard.set(cleaned, forKey: "proxy.demo.activatedKey")
             UserDefaults.standard.set(licenseExpiryText, forKey: "proxy.demo.expiryText")
             UserDefaults.standard.set(licenseRemainingText, forKey: "proxy.demo.remainingText")
-
             showToast("Kích hoạt thành công")
         } catch {
             isActivated = false
@@ -189,18 +165,15 @@ final class ProxyDemoState: ObservableObject {
     func validateStoredKey() async {
         guard !activationChecked else { return }
         activationChecked = true
-
         guard let key = activatedKey, !key.isEmpty else {
             isActivated = false
             return
         }
-
         do {
             let result = try await LicenseAPI.verify(
                 baseURL: serverURL,
                 key: key
             )
-
             if result.ok {
                 isActivated = true
                 licenseExpiryText = result.expiresAt ?? licenseExpiryText
@@ -215,7 +188,6 @@ final class ProxyDemoState: ObservableObject {
                 UserDefaults.standard.removeObject(forKey: "proxy.demo.activatedKey")
                 UserDefaults.standard.removeObject(forKey: "proxy.demo.expiryText")
                 UserDefaults.standard.removeObject(forKey: "proxy.demo.remainingText")
-
                 let message = result.error ?? "Key không tồn tại"
                 showToast("⚠️ \(message)")
             }
@@ -257,7 +229,6 @@ struct LicenseAPIResult: Decodable {
     let message: String?
     let code: String?
     let expiresAt: String?
-
     enum CodingKeys: String, CodingKey {
         case ok, status, error, message, code
         case expiresAt = "expires_at"
@@ -276,7 +247,6 @@ enum LicenseAPI {
             url.deleteLastPathComponent()
         }
         url.appendPathComponent("api/keys/activate")
-
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -286,18 +256,14 @@ enum LicenseAPI {
             "udid": deviceID,
             "device_name": deviceName
         ])
-
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else {
             throw URLError(.badServerResponse)
         }
-
         let result = try JSONDecoder().decode(LicenseAPIResult.self, from: data)
-
         guard (200...499).contains(http.statusCode) else {
             throw URLError(.badServerResponse)
         }
-
         return result
     }
 
@@ -307,7 +273,6 @@ enum LicenseAPI {
             url.deleteLastPathComponent()
         }
         url.appendPathComponent("api/keys/verify")
-
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -315,23 +280,19 @@ enum LicenseAPI {
         request.httpBody = try JSONSerialization.data(withJSONObject: [
             "key": key
         ])
-
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else {
             throw URLError(.badServerResponse)
         }
-
         let result = try JSONDecoder().decode(LicenseAPIResult.self, from: data)
-
         guard (200...499).contains(http.statusCode) else {
             throw URLError(.badServerResponse)
         }
-
         return result
     }
 }
 
-// MARK: - Home
+// MARK: - ContentView
 
 struct ContentView: View {
     @StateObject private var state = ProxyDemoState()
@@ -359,28 +320,23 @@ struct UnsupportedOSView: View {
     var body: some View {
         ZStack {
             ProxyBackground()
-
             VStack(spacing: 18) {
                 Image(systemName: "iphone.slash")
                     .font(.system(size: 52, weight: .semibold))
                     .foregroundStyle(.red)
                     .frame(width: 92, height: 92)
                     .background(Color.red.opacity(0.12), in: Circle())
-
                 Text("iOS Không Được Hỗ Trợ")
                     .font(.system(size: 28, weight: .bold))
                     .multilineTextAlignment(.center)
-
                 Text("Thiết bị đang chạy iOS \(AppInfo.osVersion) (\(AppInfo.osBuild)), chưa nằm trong danh sách tương thích.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
-
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Phiên bản hỗ trợ")
                         .font(.headline)
-
                     ForEach(ExploitSupportPolicy.supportedRanges, id: \.self) { item in
                         Label(item, systemImage: "checkmark.circle.fill")
                             .foregroundStyle(.green)
@@ -406,7 +362,6 @@ struct LicenseGateView: View {
     var body: some View {
         ZStack {
             ProxyBackground()
-
             ScrollViewReader { proxy in
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 16) {
@@ -424,7 +379,6 @@ struct LicenseGateView: View {
                                 Spacer()
                             }
                         }
-
                         VStack(alignment: .leading, spacing: 8) {
                             HStack(spacing: 8) {
                                 Text(isChangingKey ? "Đổi Key" : "ProxyVN SHOP DHP")
@@ -437,16 +391,13 @@ struct LicenseGateView: View {
                             .font(.system(size: 30, weight: .bold))
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
-
                         VStack(alignment: .leading, spacing: 12) {
                             InfoLine(icon: "apple.logo", color: .purple, title: "iOS", value: AppInfo.osVersion)
                             InfoLine(icon: "iphone", color: .cyan, title: "Device", value: AppInfo.hardwareDisplayName)
-
                             HStack(spacing: 10) {
                                 Circle()
                                     .fill(ExploitSupportPolicy.isCurrentOSSupported ? Color.green : Color.red)
                                     .frame(width: 12, height: 12)
-
                                 Text(ExploitSupportPolicy.isCurrentOSSupported ? "Có Hỗ Trợ" : "Không Hỗ Trợ")
                                     .font(.title3.weight(.bold))
                                     .foregroundStyle(ExploitSupportPolicy.isCurrentOSSupported ? Color.green : Color.red)
@@ -454,17 +405,14 @@ struct LicenseGateView: View {
                         }
                         .padding(18)
                         .proxyCard()
-
                         VStack(alignment: .leading, spacing: 12) {
                             Text("Thiết bị này:")
                                 .font(.headline)
-
                             Text(state.deviceID)
                                 .font(.footnote.monospaced())
                                 .foregroundStyle(.secondary)
                                 .textSelection(.enabled)
                                 .fixedSize(horizontal: false, vertical: true)
-
                             Button {
                                 state.copyDeviceID()
                             } label: {
@@ -475,7 +423,6 @@ struct LicenseGateView: View {
                                 }
                             }
                             .buttonStyle(.plain)
-
                             HStack(spacing: 10) {
                                 TextField("Nhập / dán key...", text: $key)
                                     .focused($keyFocused)
@@ -487,7 +434,6 @@ struct LicenseGateView: View {
                                         keyFocused = false
                                         Task { await state.activate(key) }
                                     }
-
                                 Button {
                                     key = UIPasteboard.general.string ?? ""
                                     keyFocused = true
@@ -504,7 +450,6 @@ struct LicenseGateView: View {
                                 RoundedRectangle(cornerRadius: 17, style: .continuous)
                                     .stroke(Color.white.opacity(0.08), lineWidth: 1)
                             }
-
                             Button {
                                 keyFocused = false
                                 Task { await state.activate(key) }
@@ -625,17 +570,13 @@ struct ProxyShopHomeView: View {
                     Text("ProxyVN SHOP DHP")
                         .font(.system(size: 27, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
-
                     Image(systemName: "checkmark.seal.fill")
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundStyle(.blue)
                         .accessibilityLabel("Đã xác minh")
                 }
-
             }
-
             Spacer(minLength: 8)
-
             Button {
                 showSettings = true
             } label: {
@@ -651,18 +592,14 @@ struct ProxyShopHomeView: View {
         VStack(alignment: .leading, spacing: 12) {
             InfoLine(icon: "apple.logo", color: .purple, title: "iOS", value: AppInfo.osVersion)
             InfoLine(icon: "iphone", color: .cyan, title: "Device", value: AppInfo.hardwareDisplayName)
-
             HStack(spacing: 10) {
                 Circle()
                     .fill(ExploitSupportPolicy.isCurrentOSSupported ? Color.green : Color.red)
                     .frame(width: 12, height: 12)
-
                 Text(ExploitSupportPolicy.isCurrentOSSupported ? "Có Hỗ Trợ" : "Không Hỗ Trợ")
                     .font(.title3.weight(.bold))
                     .foregroundStyle(ExploitSupportPolicy.isCurrentOSSupported ? Color.green : Color.red)
-
                 Spacer()
-
                 Text("iOS 16 → 27 beta")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
@@ -684,27 +621,22 @@ struct ProxyShopHomeView: View {
                                    endPoint: .bottomTrailing),
                     in: RoundedRectangle(cornerRadius: 12, style: .continuous)
                 )
-
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 5) {
                     Text("KEY \(state.maskedKey)")
                         .font(.caption.weight(.bold))
                         .lineLimit(1)
                         .minimumScaleFactor(0.65)
-
                     Image(systemName: "checkmark.seal.fill")
                         .font(.caption2)
                         .foregroundStyle(.blue)
                 }
-
                 Text(state.remainingText(from: state.licenseExpiryText))
                     .id(countdownTick)
                     .font(.caption2.weight(.medium))
                     .foregroundStyle(state.licenseExpiryText == nil ? Color.secondary : Color.green)
             }
-
             Spacer(minLength: 4)
-
             Button("Đổi Key") {
                 showChangeKey = true
             }
@@ -756,7 +688,6 @@ struct GameLauncherCard: View {
                     .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                     .padding(.top, 22)
                     .padding(.bottom, 18)
-
                 Text(title)
                     .font(.headline.weight(.bold))
                     .foregroundStyle(.white)
@@ -908,30 +839,20 @@ struct SettingsRow: View {
     }
 }
 
-// MARK: - Game demo screen
+// MARK: - Game Demo Feature
 
 struct DemoFeature: Identifiable {
     let id = UUID()
     let name: String
-    let localFeature: LocalPatchFeature?
     let description: String
-
-    init(name: String, localFeature: LocalPatchFeature? = nil, description: String) {
-        self.name = name
-        self.localFeature = localFeature
-        self.description = description
-    }
-
-    func definition(for bundleID: String) -> LocalPatchDefinition? {
-        guard let localFeature, let game = LocalGameVariant(rawValue: bundleID) else { return nil }
-        return LocalPatchDefinitions.definition(for: localFeature, game: game)
-    }
-
-    func isBundled(for bundleID: String) -> Bool {
-        guard let definition = definition(for: bundleID) else { return false }
-        return PatchAssetLoader.exists(for: definition)
+    let patchResource: String?   // Tên file .3105 (không có extension)
+    
+    var hasPatch: Bool {
+        patchResource != nil
     }
 }
+
+// MARK: - Game Demo View
 
 struct GameDemoView: View {
     let title: String
@@ -946,24 +867,23 @@ struct GameDemoView: View {
     @State private var failedIndices = Set<Int>()
 
     private let proxyFeatures: [DemoFeature] = [
-        DemoFeature(name: "Proxy Aim Body", localFeature: .aimBody, description: "Full đỏ toàn thân"),
-        DemoFeature(name: "Proxy Aim Neck V1", localFeature: .aimNeckV1, description: "Headshot cổ ít lộ"),
-        DemoFeature(name: "Proxy Aim Neck V2", localFeature: .aimNeckV2, description: "HeadShot ngực và cổ siêu bá"),
-        DemoFeature(name: "Proxy Aim Drag", localFeature: .aimDrag, description: "Lộ đỉnh đầu, kéo nhẹ là full đỏ"),
-        DemoFeature(name: "Magic V4", localFeature: .magicV4, description: "Bắn xung quay người vẫn tính dame")
+        DemoFeature(name: "Proxy Aim Body", description: "Full đỏ toàn thân", patchResource: nil),
+        DemoFeature(name: "Proxy Aim Neck V1", description: "Headshot cổ ít lộ", patchResource: nil),
+        DemoFeature(name: "Proxy Aim Neck V2", description: "HeadShot ngực và cổ siêu bá", patchResource: nil),
+        DemoFeature(name: "Proxy Aim Drag", description: "Lộ đỉnh đầu, kéo nhẹ là full đỏ", patchResource: nil),
+        DemoFeature(name: "Magic V4", description: "Bắn xung quay người vẫn tính dame", patchResource: "MagicV4")
     ]
 
     private let locationFeatures: [DemoFeature] = [
-        DemoFeature(name: "Định Vị Súng Xanh", description: "Chưa có patch tương ứng"),
-        DemoFeature(name: "Định Vị Súng Đỏ", description: "Chưa có patch tương ứng"),
-        DemoFeature(name: "Định Vị Súng Hồng", description: "Chưa có patch tương ứng")
+        DemoFeature(name: "Định Vị Súng Xanh", description: "Hiển thị định vị theo cấu hình", patchResource: nil),
+        DemoFeature(name: "Định Vị Súng Đỏ", description: "Hiển thị định vị theo cấu hình", patchResource: nil),
+        DemoFeature(name: "Định Vị Súng Hồng", description: "Hiển thị định vị theo cấu hình", patchResource: nil)
     ]
 
     var body: some View {
         NavigationStack {
             ZStack {
                 ProxyBackground()
-
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 16) {
                         Image(imageName)
@@ -989,11 +909,7 @@ struct GameDemoView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 17)
                             .background(
-                                LinearGradient(
-                                    colors: [.purple, .cyan],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                ),
+                                LinearGradient(colors: [.purple, .cyan], startPoint: .leading, endPoint: .trailing),
                                 in: RoundedRectangle(cornerRadius: 20, style: .continuous)
                             )
                         }
@@ -1003,12 +919,9 @@ struct GameDemoView: View {
 
                         Group {
                             switch selectedTab {
-                            case 0:
-                                featureList(features: proxyFeatures)
-                            case 1:
-                                featureList(features: locationFeatures)
-                            default:
-                                featureList(features: [])
+                            case 0: featureList(features: proxyFeatures)
+                            case 1: featureList(features: locationFeatures)
+                            default: featureList(features: [])
                             }
                         }
                         .id(selectedTab)
@@ -1020,11 +933,7 @@ struct GameDemoView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        CircleIcon(systemName: "chevron.left")
-                    }
+                    Button { dismiss() } label: { CircleIcon(systemName: "chevron.left") }
                 }
             }
             .toolbarBackground(.hidden, for: .navigationBar)
@@ -1035,46 +944,18 @@ struct GameDemoView: View {
 
     private var tabBar: some View {
         HStack(spacing: 0) {
-            GameTab(
-                title: "Proxy",
-                icon: "bolt.fill",
-                active: selectedTab == 0,
-                activeColor: .cyan
-            ) {
-                selectTab(0)
-            }
-
-            GameTab(
-                title: "Định Vị",
-                icon: "location.fill",
-                active: selectedTab == 1,
-                activeColor: .purple
-            ) {
-                selectTab(1)
-            }
-
-            GameTab(
-                title: "Mod NV",
-                icon: "person.2.fill",
-                active: selectedTab == 2,
-                activeColor: .green
-            ) {
-                selectTab(2)
-            }
+            GameTab(title: "Proxy", icon: "bolt.fill", active: selectedTab == 0, activeColor: .cyan) { selectTab(0) }
+            GameTab(title: "Định Vị", icon: "location.fill", active: selectedTab == 1, activeColor: .purple) { selectTab(1) }
+            GameTab(title: "Mod NV", icon: "person.2.fill", active: selectedTab == 2, activeColor: .green) { selectTab(2) }
         }
         .padding(4)
         .background(Color.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
-        )
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Color.white.opacity(0.10), lineWidth: 1))
     }
 
     private func selectTab(_ tab: Int) {
         guard selectedTab != tab else { return }
-        withAnimation(.easeOut(duration: 0.18)) {
-            selectedTab = tab
-        }
+        withAnimation(.easeOut(duration: 0.18)) { selectedTab = tab }
     }
 
     private func featureList(features: [DemoFeature]) -> some View {
@@ -1082,14 +963,10 @@ struct GameDemoView: View {
             ForEach(features.indices, id: \.self) { index in
                 featureRow(features[index], index: index)
             }
-
             if features.isEmpty {
                 VStack(spacing: 8) {
-                    Image(systemName: "person.2.fill")
-                        .font(.system(size: 26))
-                        .foregroundStyle(.green)
-                    Text("Mod NV")
-                        .font(.headline)
+                    Image(systemName: "person.2.fill").font(.system(size: 26)).foregroundStyle(.green)
+                    Text("Mod NV").font(.headline)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 30)
@@ -1100,63 +977,36 @@ struct GameDemoView: View {
 
     private func featureRow(_ feature: DemoFeature, index: Int) -> some View {
         let accent = AppTheme.rowColor(index + selectedTab * 2)
-        let available = feature.isBundled(for: bundleID)
-        let canToggle = available
+        let canToggle = feature.hasPatch
 
         return HStack(spacing: 12) {
             Image(systemName: enabled.contains(index) ? "checkmark" : "bolt.fill")
                 .foregroundStyle(enabled.contains(index) ? Color.green : accent)
                 .frame(width: 40, height: 40)
-                .background(
-                    (enabled.contains(index) ? Color.green : accent).opacity(0.14),
-                    in: RoundedRectangle(cornerRadius: 11, style: .continuous)
-                )
+                .background((enabled.contains(index) ? Color.green : accent).opacity(0.14), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(feature.name)
-                    .font(.headline)
-                    .lineLimit(1)
-
-                Text(busyIndex == index
-                     ? "Processing / Đang xử lý…"
-                     : (enabled.contains(index)
-                        ? "Enabled / Đã bật"
-                        : (!available
-                           ? "Maintenance / Đang bảo trì"
-                           : (failedIndices.contains(index)
-                              ? "Unavailable / Không khả dụng"
-                              : feature.description))))
+                Text(feature.name).font(.headline).lineLimit(1)
+                Text(failedIndices.contains(index) ? "⚠️ Chức năng đang bảo trì" : feature.description)
                     .font(.caption2)
-                    .foregroundStyle(enabled.contains(index) ? Color.green : (!available || failedIndices.contains(index) ? Color.orange : Color.secondary))
+                    .foregroundStyle(failedIndices.contains(index) ? Color.orange : Color.secondary)
             }
 
             Spacer(minLength: 8)
 
             if busyIndex == index {
-                ProgressView()
-                    .progressViewStyle(.circular)
-                    .tint(accent)
-                    .frame(width: 34, height: 34)
+                ProgressView().progressViewStyle(.circular).tint(accent).frame(width: 34, height: 34)
             } else {
                 if enabled.contains(index) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.title2)
-                        .foregroundStyle(.green)
+                    Image(systemName: "checkmark.circle.fill").font(.title2).foregroundStyle(.green)
                 } else if failedIndices.contains(index) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.title2)
-                        .foregroundStyle(.red)
+                    Image(systemName: "xmark.circle.fill").font(.title2).foregroundStyle(.red)
                 }
 
-                Toggle(
-                    "",
-                    isOn: Binding(
-                        get: { enabled.contains(index) },
-                        set: { value in
-                            handleFeature(feature, index: index, value: value)
-                        }
-                    )
-                )
+                Toggle("", isOn: Binding(
+                    get: { enabled.contains(index) },
+                    set: { value in handleFeature(feature, index: index, value: value) }
+                ))
                 .labelsHidden()
                 .tint(accent)
                 .disabled(!canToggle)
@@ -1165,20 +1015,21 @@ struct GameDemoView: View {
         .padding(.horizontal, 13)
         .padding(.vertical, 11)
         .background(Color.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 15, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
-        )
+        .overlay(RoundedRectangle(cornerRadius: 15, style: .continuous).strokeBorder(Color.white.opacity(0.06), lineWidth: 1))
         .contentShape(Rectangle())
     }
 
     private func handleFeature(_ feature: DemoFeature, index: Int, value: Bool) {
         guard busyIndex == nil else { return }
-
-        guard feature.isBundled(for: bundleID) else {
+        guard state.canUseFeatures else {
+            enabled.remove(index)
+            state.showToast(state.isLicenseExpired ? "⚠️ Key đã hết hạn" : "⚠️ Vui lòng kích hoạt Key trước")
+            return
+        }
+        guard let resourceName = feature.patchResource else {
             enabled.remove(index)
             failedIndices.insert(index)
-            state.showToast("Unavailable / Không khả dụng")
+            state.showToast("⚠️ Chức năng chưa có patch")
             return
         }
 
@@ -1187,37 +1038,29 @@ struct GameDemoView: View {
 
         Task { @MainActor in
             defer {
-                withAnimation(.easeOut(duration: 0.16)) {
-                    busyIndex = nil
-                }
+                withAnimation(.easeOut(duration: 0.16)) { busyIndex = nil }
             }
 
-            do {
-                if value {
-                    guard let definition = feature.definition(for: bundleID),
-                          let resourceURL = PatchAssetLoader.url(for: definition) else {
-                        throw PatchPackageError.invalidProject
-                    }
+            // Gọi RealPatchManager để áp dụng patch vào game thật
+            let success = RealPatchManager.applyPatchFrom3105(
+                resourceName: resourceName,
+                gameBundleID: bundleID,
+                isOn: value
+            )
 
-                    // The UI only applies to this app's private demo workspace.
-                    // It does not modify another app's sandbox.
-                    try await Task.sleep(nanoseconds: 900_000_000)
-                    _ = try DevicePatchService.applyBundledDemoPatch(
-                        resourceName: resourceURL.lastPathComponent,
-                        featureName: feature.name
-                    )
+            if success {
+                if value {
                     enabled.insert(index)
-                    failedIndices.remove(index)
-                    state.showToast("Ready / Sẵn sàng: \(feature.name) ✓")
+                    state.showToast("✅ Đã kích hoạt \(feature.name)")
                 } else {
                     enabled.remove(index)
-                    failedIndices.remove(index)
-                    state.showToast("Đã tắt \(feature.name)")
+                    state.showToast("✅ Đã tắt \(feature.name)")
                 }
-            } catch {
+                failedIndices.remove(index)
+            } else {
                 enabled.remove(index)
                 failedIndices.insert(index)
-                state.showToast("Không khả dụng")
+                state.showToast("⚠️ Không thể áp dụng patch cho \(feature.name)")
             }
         }
     }
@@ -1239,19 +1082,13 @@ struct GameTab: View {
     var body: some View {
         Button(action: action) {
             VStack(spacing: 5) {
-                Image(systemName: icon)
-                    .font(.subheadline.weight(.semibold))
-
-                Text(title)
-                    .font(.footnote.weight(.semibold))
+                Image(systemName: icon).font(.subheadline.weight(.semibold))
+                Text(title).font(.footnote.weight(.semibold))
             }
             .foregroundStyle(active ? activeColor : Color.secondary)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 11)
-            .background(
-                active ? activeColor.opacity(0.12) : Color.clear,
-                in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-            )
+            .background(active ? activeColor.opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay {
                 if active {
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -1278,8 +1115,6 @@ struct LicenseKeyView: View {
 }
 
 // MARK: - Policy / Info
-
-
 
 struct PolicyView: View {
     @Environment(\.dismiss) private var dismiss
@@ -1353,7 +1188,6 @@ struct ProxyBackground: View {
                 startPoint: .top,
                 endPoint: .bottom
             )
-
             RadialGradient(
                 colors: [Color.purple.opacity(0.18), .clear],
                 center: .top,
@@ -1401,7 +1235,6 @@ struct ToastPill: View {
             Image(systemName: isWarning ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
                 .foregroundStyle(isWarning ? Color.yellow : Color.green)
                 .padding(.top, 1)
-
             Text(text)
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(.white)
