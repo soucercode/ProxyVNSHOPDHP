@@ -272,9 +272,6 @@ jobs:
 
           cp -R "$APP_PATH" "$PAYLOAD_DIR/"
 
-          # COPY THƯ MỤC Patches VÀO APP BUNDLE
-          cp -R "${{ steps.project.outputs.project_dir }}/ThreeOneOSFive/Patches" "$PAYLOAD_DIR/ProxySHOPDHP.app/"
-
           cd "$RUNNER_TEMP"
 
           /usr/bin/zip -qry "$IPA_PATH" "Payload"
