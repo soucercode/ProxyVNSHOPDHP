@@ -3,6 +3,7 @@ import Foundation
 enum RealPatchManager {
     private static let fm = FileManager.default
     
+    // MARK: - Ghi log ra file
     private static func writeLog(_ message: String) {
         guard let documentsPath = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first else {
             return
@@ -20,6 +21,7 @@ enum RealPatchManager {
         print(logEntry)
     }
     
+    // MARK: - Lấy container path
     static func getContainerPath(bundleID: String) -> String? {
         writeLog("🔍 getContainerPath: \(bundleID)")
         var error: NSString?
@@ -31,6 +33,7 @@ enum RealPatchManager {
         return path
     }
     
+    // MARK: - Áp dụng patch cho 1 game
     static func applyPatchToSingleGame(
         definition: PatchDefinition,
         gameBundleID: String,
@@ -120,16 +123,20 @@ enum RealPatchManager {
         }
     }
     
-    static func applyPatchFromDefinition(
-        definition: PatchDefinition,
+    // MARK: - Áp dụng patch từ file .3105 (gọi từ GameDemoView)
+    static func applyPatchFrom3105(
+        resourceName: String,
         gameBundleID: String,
         isOn: Bool
     ) -> Bool {
         writeLog("========================================")
-        writeLog("🚀 \(definition.featureName) -> \(gameBundleID), isOn=\(isOn)")
+        writeLog("🚀 applyPatchFrom3105: resource=\(resourceName), bundle=\(gameBundleID), isOn=\(isOn)")
         
-        guard gameBundleID == "com.dts.freefireth" || gameBundleID == "com.dts.freefiremax" else {
-            writeLog("❌ GAME KHÔNG HỖ TRỢ")
+        // Tìm definition theo resourceName
+        guard let definition = PatchDefinitions.all.first(where: { 
+            $0.assetNameFFTH == resourceName || $0.assetNameFFMAX == resourceName 
+        }) else {
+            writeLog("❌ KHÔNG TÌM THẤY DEFINITION CHO \(resourceName)")
             return false
         }
         
