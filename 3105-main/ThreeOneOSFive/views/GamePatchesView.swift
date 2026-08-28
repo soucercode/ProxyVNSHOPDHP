@@ -208,7 +208,7 @@ struct GamePatchesView: View {
 
                     let receipt = try PatchTransaction.apply(
                         project: project,
-                        backupRoot: try PatchProjectLibrary.backupRoot(),
+                        backupRoot: try PatchProjectLibrary.backupRootURL(),
                         containerResolver: { bundleID in
                             guard let path = ContainerStore.resolveAppContainerPath(bundleID: bundleID) else {
                                 throw PatchPackageError.targetAppUnavailable(bundleID)
