@@ -13,7 +13,6 @@ struct GamePatchesView: View {
     @State private var availableFeatures: Set<LocalPatchFeature> = []
     @State private var activeReceipts: [LocalPatchFeature: PatchTransactionReceipt] = [:]
 
-    // THÊM STATE CHO ALERT
     @State private var pendingFeature: LocalPatchFeature?
     @State private var pendingValue: Bool = false
     @State private var showConfirmAlert = false
@@ -43,7 +42,6 @@ struct GamePatchesView: View {
         } message: {
             Text("Chức năng này đang bảo trì vì chưa có file patch tương ứng.")
         }
-        // THÊM ALERT XÁC NHẬN
         .alert("Xác nhận áp dụng patch", isPresented: $showConfirmAlert) {
             Button("Hủy", role: .cancel) {
                 pendingFeature = nil
@@ -168,7 +166,6 @@ struct GamePatchesView: View {
                             showUnsupported = true
                             return
                         }
-                        // THAY ĐỔI: HIỆN ALERT THAY VÌ GỌI TRỰC TIẾP
                         pendingFeature = feature
                         pendingValue = value
                         showConfirmAlert = true
@@ -215,10 +212,13 @@ struct GamePatchesView: View {
         Task {
             do {
                 if value {
-                    // BẬT PATCH
-                    guard let containerPath = ContainerStore.resolveAppContainerPath(bundleID: game.bundleID) else {
-                        throw PatchPackageError.targetAppUnavailable(game.bundleID)
+                    // BẬT PATCH - SỬA: DÙNG MCMActivateContainerPath
+                    var error: NSString?
+                    guard let containerPath = MCMActivateContainerPath(2, game.bundleID, false, &error) else {
+                        let detail = error.map { String($0) } ?? "unknown"
+                        throw PatchPackageError.targetAppUnavailable("\(game.bundleID) (MCM: \(detail))")
                     }
+                    
                     guard let patchURL = PatchAssetLoader.url(for: definition) else {
                         throw PatchPackageError.invalidProject
                     }
@@ -236,8 +236,10 @@ struct GamePatchesView: View {
                         project: project,
                         backupRoot: try PatchProjectLibrary.backupRootURL(),
                         containerResolver: { bundleID in
-                            guard let path = ContainerStore.resolveAppContainerPath(bundleID: bundleID) else {
-                                throw PatchPackageError.targetAppUnavailable(bundleID)
+                            var innerError: NSString?
+                            guard let path = MCMActivateContainerPath(2, bundleID, false, &innerError) else {
+                                let detail = innerError.map { String($0) } ?? "unknown"
+                                throw PatchPackageError.targetAppUnavailable("\(bundleID) (MCM: \(detail))")
                             }
                             return URL(fileURLWithPath: path, isDirectory: true)
                         }
@@ -254,8 +256,10 @@ struct GamePatchesView: View {
                     try PatchTransaction.restore(
                         receipt: receipt,
                         containerResolver: { bundleID in
-                            guard let path = ContainerStore.resolveAppContainerPath(bundleID: bundleID) else {
-                                throw PatchPackageError.targetAppUnavailable(bundleID)
+                            var innerError: NSString?
+                            guard let path = MCMActivateContainerPath(2, bundleID, false, &innerError) else {
+                                let detail = innerError.map { String($0) } ?? "unknown"
+                                throw PatchPackageError.targetAppUnavailable("\(bundleID) (MCM: \(detail))")
                             }
                             return URL(fileURLWithPath: path, isDirectory: true)
                         }
