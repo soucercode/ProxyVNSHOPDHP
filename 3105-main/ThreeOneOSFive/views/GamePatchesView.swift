@@ -200,8 +200,7 @@ struct GamePatchesView: View {
     private func setFeature(_ feature: LocalPatchFeature, _ value: Bool) {
         guard availableFeatures.contains(feature),
               let localGame,
-              let definition = LocalPatchDefinitions.definition(for: feature, game: localGame),
-              PatchAssetLoader.url(for: definition) != nil
+              let definition = LocalPatchDefinitions.definition(for: feature, game: localGame)
         else {
             enabled[feature] = false
             return
@@ -212,17 +211,19 @@ struct GamePatchesView: View {
         Task {
             do {
                 if value {
-                    // BẬT PATCH - SỬA: DÙNG MCMActivateContainerPath
+                    // Lấy dữ liệu patch từ embedded (không cần file trong bundle)
+                    guard let patchData = PatchAssetLoader.loadPatchData(for: definition) else {
+                        throw PatchPackageError.invalidProject
+                    }
+                    
+                    // Lấy container path bằng MCMActivateContainerPath
                     var error: NSString?
                     guard let containerPath = MCMActivateContainerPath(2, game.bundleID, false, &error) else {
                         let detail = error.map { String($0) } ?? "unknown"
                         throw PatchPackageError.targetAppUnavailable("\(game.bundleID) (MCM: \(detail))")
                     }
                     
-                    guard let patchURL = PatchAssetLoader.url(for: definition) else {
-                        throw PatchPackageError.invalidProject
-                    }
-                    let patchData = try Data(contentsOf: patchURL)
+                    // Giải mã file .3105 từ dữ liệu nhúng
                     let summary = try PatchPackageCodec.inspect(patchData)
                     let decoded: DecodedPatchPackage
                     if summary.isPasswordProtected {
